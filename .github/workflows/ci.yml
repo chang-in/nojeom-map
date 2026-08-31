@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # 제3자 Action은 태그가 아니라 전체 commit SHA로 고정한다 (태그는 움직인다)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build
+      # 테스트 러너는 아직 없다. 첫 테스트가 생기면 여기에 npm test를 더한다
+
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # --config auto는 리포 주소가 Semgrep 레지스트리로 나간다 — 룰셋을 직접 지정한다
+      - run: |
+          docker run --rm -v "$PWD:/src" --workdir /src \
+            semgrep/semgrep:1.172.0 \
+            semgrep scan --config p/default --metrics=off --error --severity=ERROR
+
+  sca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm audit --audit-level=high
+
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # base와 비교해 새 의존성을 가려낸다
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # github 컨텍스트를 run에 직접 넣지 않는다 — 값이 셸로 그대로 들어가 주입에 쓰인다.
+      # env로 옮기면 셸이 문자열로만 받는다.
+      - env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bash scripts/gate-deps.sh "origin/$BASE_REF"
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # 히스토리 전체를 본다. 얕은 클론이면 과거 커밋의 유출을 놓친다
+      # gitleaks-action은 CLI와 라이선스가 다르다(조직 계정은 키 필요) — 이미지를 직접 부른다
+      - run: |
+          docker run --rm -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --redact --no-banner
+
+  # 브랜치 보호의 required는 이 잡 하나만 건다.
+  # 개별 잡을 required로 걸면 스킵된 잡이 Pending으로 남아 PR이 영원히 안 열린다.
+  ci:
+    if: always()
+    needs: [test, sast, sca, deps, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for r in "${{ needs.test.result }}" "${{ needs.sast.result }}" \
+                   "${{ needs.sca.result }}" "${{ needs.deps.result }}" \
+                   "${{ needs.secrets.result }}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "선행 잡 결과: $r"; exit 1 ;;
+            esac
+          done
