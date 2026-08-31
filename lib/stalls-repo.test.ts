@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { buildStallsQuery, MAX_LIMIT, parseLimit } from "./stalls-repo";
 
 describe("parseLimit — 한 요청이 DB를 다 긁어가지 못하게 한다", () => {
@@ -47,5 +47,48 @@ describe("buildStallsQuery — bbox를 PostgREST 질의로 옮긴다", () => {
     const q = buildStallsQuery(bbox, 100);
     expect(q).not.toContain("status");
     expect(q).not.toContain("created_at");
+  });
+
+  it("최근 확인순으로 정렬한다 — 잘릴 때 무엇이 살아남는지 정해야 한다", () => {
+    // 정렬이 없으면 Postgres가 주는 대로 나가고, 상한에서 잘릴 때
+    // 화면 한쪽 구역이 통째로 비어 보인다("여긴 노점이 없나 보다").
+    expect(buildStallsQuery(bbox, 100)).toContain("order=last_confirmed_at.desc");
+  });
+});
+
+describe("toResponse — 잘렸는지 알 수 있어야 한다", () => {
+  const row = (id: string) => ({
+    id,
+    kinds: ["붕어빵"],
+    name: null,
+    lat: 37.5,
+    lng: 126.9,
+    last_confirmed_at: "2026-08-31T00:00:00Z",
+  });
+
+  it("limit 이하면 truncated=false", async () => {
+    const { toResponse } = await import("./stalls-repo");
+    const r = toResponse([row("a"), row("b")], 10);
+    expect(r.meta.truncated).toBe(false);
+    expect(r.meta.count).toBe(2);
+    expect(r.data).toHaveLength(2);
+  });
+
+  it("limit을 넘겨 받으면 잘라내고 truncated=true", async () => {
+    // 판정을 위해 limit+1개를 요청한다. 하나 더 왔다는 건 뒤에 더 있다는 뜻이다.
+    const { toResponse } = await import("./stalls-repo");
+    const r = toResponse([row("a"), row("b"), row("c")], 2);
+    expect(r.meta.truncated).toBe(true);
+    expect(r.data).toHaveLength(2);
+    expect(r.meta.count).toBe(2);
+  });
+
+  it("snake_case를 camelCase로 바꾼다", async () => {
+    const { toResponse } = await import("./stalls-repo");
+    const r = toResponse([row("a")], 10) as unknown as {
+      data: Record<string, unknown>[];
+    };
+    expect(r.data[0].lastConfirmedAt).toBe("2026-08-31T00:00:00Z");
+    expect(r.data[0].last_confirmed_at).toBeUndefined();
   });
 });
