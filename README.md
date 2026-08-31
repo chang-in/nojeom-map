@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 노점 지도
 
-## Getting Started
+붕어빵·떡볶이·어묵 같은 **길거리 노점의 위치를 사람들이 제보하고 지도에서 찾는** 서비스.
 
-First, run the development server:
+## 누구를 위한 것인가
+
+- **찾는 사람** — "지금 이 근처에 붕어빵 파는 데 있나"를 알고 싶은 사람
+- **제보하는 사람** — 오다가다 본 노점을 지도에 찍어두는 사람
+
+로그인은 없다. 누구나 보고 누구나 제보한다.
+
+## 지금 되는 것
+
+지도에서 위치를 찍어 노점을 제보하면, 다른 사람 지도에도 보인다.
+
+## 지금 안 되는 것
+
+리뷰 · 사진 · 로그인 · 검색 · 영업시간 · "지금 영업중" 표시.
+**미룬 이유는 각각 [Issues](../../issues)에 한 줄씩 적혀 있다.**
+
+첫 고리(제보 → 표시)가 돌아야 나머지가 붙을 자리가 생긴다.
+
+## 성공을 무엇으로 재나
+
+**제보가 쌓이고 그게 유효한가.** 지도에 핀이 100개 있어도 절반이 없어진 노점이면
+아무도 안 믿는다. 그래서 보는 건 둘이다 — **제보 수**와 **최근 확인된 비율**.
+
+## ⚠️ 이 서비스의 핵심 제약
+
+노점상은 **무허가 영업인 경우가 많다.** 정확한 위치 공개가 단속·민원의 도구가 될 수 있어서,
+공개 좌표는 **소수점 4자리(≈11m)로 흐린다.** 정확한 값은 DB에만 둔다.
+
+같은 이유로 **"현재 영업중"이라고 쓰지 않는다** — "최근 제보됨"으로만 표현한다.
+그리고 **누구나 로그인 없이 삭제를 요청**할 수 있다.
+
+> 설계 판단의 근거는 [`docs/design.md`](docs/design.md)에 있다.
+
+## 스택
+
+Next.js 16 · Leaflet(OSM 타일) · Supabase(Postgres) · Vercel
+
+⚠️ OSM 기본 타일 서버는 SLA가 없고 사용량이 많으면 차단될 수 있다.
+attribution은 필수이고, 트래픽이 늘면 전용 타일 제공자로 옮긴다.
+→ [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)
+
+## 개발
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+CI는 PR마다 다섯 잡을 돌린다 — 빌드·타입 · SAST · 의존성 취약점 · **새 의존성 실재 확인** · 시크릿.
+`ci` 집계 잡이 브랜치 보호의 required check다.
