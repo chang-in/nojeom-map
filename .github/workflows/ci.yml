@@ -24,6 +24,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # Next 16은 라우트·레이아웃 타입(LayoutProps 등)을 생성한다.
+      # typegen 없이 tsc를 돌리면 "Cannot find name 'LayoutProps'"로 죽는다.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run build
       # 테스트 러너는 아직 없다. 첫 테스트가 생기면 여기에 npm test를 더한다
