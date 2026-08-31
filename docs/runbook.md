@@ -39,10 +39,31 @@ vercel promote <최신-배포-URL> --yes
 
 ## DB 복구
 
-(Supabase 미연결 — 붙으면 채운다)
+🔴 **지금 백업이 없다. 데이터를 잃으면 못 되돌린다.** 알고 안 하는 것이다.
 
-마지막 복구 테스트: **아직 안 함.** 지금 하면 빈 DB를 빈 DB로 복구하는 거라 거짓 통과가 된다.
-실데이터가 생긴 뒤 한 번 해보고 날짜를 채운다.
+- Supabase **무료 플랜은 자동 백업도 PITR도 없다.** 백업 다운로드도 안 된다
+  ([공식 문서](https://supabase.com/docs/guides/platform/backups)) — `supabase db dump`로
+  직접 내보내고 서버 밖에 두라고 안내한다
+- 지금 안 하는 이유: **행이 0개**다. 잃을 게 없는데 장치부터 만드는 건 순서가 뒤집힌 것
+- **RPO / RTO: 없음.** 백업이 없으니 되돌릴 시점도, 복구 시간도 없다
+
+### 언제 해야 하나 — 트리거
+
+**첫 실데이터(남이 올린 제보)가 들어오는 순간.** "나중에"가 아니라 이 조건이다.
+그때 결정할 것이 하나 있다:
+
+⚠️ **리포가 public이라 Actions artifact는 누구나 받을 수 있다.** 덤프에는
+**흐리지 않은 정확한 좌표**와 `hidden`(신고 접수된) 행이 들어가서, 공개하면
+`blurCoord`의 11m 흐리기와 RLS를 통째로 우회하게 된다.
+→ 후보: OCI 서버로 scp · gpg 암호화 후 artifact · private 전환 · R2/S3
+
+```bash
+# 그때 쓸 명령 (지금도 수동으로는 된다)
+npx supabase db dump --db-url "postgresql://postgres:<PW>@db.popbgdaqwovwfmrtzadm.supabase.co:5432/postgres" -f backup.sql
+```
+
+마지막 복구 테스트: **아직 안 함.** 빈 DB를 빈 DB로 복구하면 거짓 통과다.
+성공 조건은 미리 정해둔다 — **행 수가 원본과 맞고**, **앱을 붙여 제보 조회가 되고**, **RTO 안**.
 
 ## 볼 곳
 
