@@ -7,18 +7,14 @@
 
 ## 데이터 모델
 
-스키마 파일이 생기면 이 절은 경로만 가리킨다. (아직 없음)
+컬럼 목록은 `supabase/migrations/`에 있다.
 
 ```
-stall
-  id              uuid          삭제해도 재사용하지 않는다
-  kinds           text[]        ['붕어빵','어묵']
-  name            text?
-  lat, lng        double precision   정확한 값. 공개는 흐린 값
-  status          active | hidden | removed
-  lastConfirmedAt timestamptz
-  createdAt, updatedAt
+stall          정확한 좌표를 담는다. anon은 SELECT 정책이 없어 아예 못 본다
+stall_public   trunc(,4) 흐린 좌표 + active만. anon은 이것만 본다 (뷰)
 ```
+
+읽는 쪽은 **항상 `stall_public`** 이다. 이유는 아래 "좌표를 흐리는 자리가 DB인 이유".
 
 ## 인터페이스
 
@@ -86,6 +82,23 @@ POST /api/stalls/:id/reports  { reason }      → 202   접수 즉시 status=hid
 > **확인 가능한 사례를 찾지 못했다.** 사례는 미확인으로 두되, **가능성만으로도 예방한다.**
 
 공개 좌표는 **소수점 4자리(≈11m)** 로 자른다. 정확한 값은 DB에만 둔다.
+
+### 좌표를 흐리는 자리가 DB인 이유 — 앱이 아니다
+
+처음엔 앱의 `toPublicStall`이 흐렸다. **그건 우회된다.**
+`anon` 키는 브라우저에 노출되므로 클라이언트가 우리 API를 안 거치고 PostgREST를 직접
+부르면 그만이다 (실측 2026-08-31: `lat=37.5665123`이 그대로 나왔다).
+
+**RLS로도 못 막는다 — RLS는 행 단위지 열 단위가 아니다.** `hidden` 행은 걸러도
+`active` 행의 좌표 열은 나간다. 그래서 `stall`의 anon SELECT를 없애고
+흐린 좌표만 담은 `stall_public` 뷰를 공개한다(`security_invoker = false`).
+
+DB의 `trunc(,4)`는 `lib/geo.ts`의 `blurCoord`와 **같은 규칙**이다 — 반올림이 아니라
+잘라내기여서 어느 경로로 읽어도 값이 같다.
+
+⚠️ 그 결과 **`toPublicStall`·`blurCoord`는 라우트에서 안 쓰인다.** 뷰가 같은 일을 한다.
+지우지 않은 건 관리 기능이 `service_role`로 `stall`을 직접 읽게 되면 필요해서다.
+그 경로가 안 생기면 지운다.
 
 | 후보 | 결과 |
 |---|---|
